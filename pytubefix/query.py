@@ -1,12 +1,14 @@
 """This module provides a query interface for media streams and captions."""
 from collections.abc import Mapping, Sequence
-from typing import Callable, List, Optional, Union
+from typing import Callable, Generic, List, Optional, TypeVar, Union
 
 from pytubefix import Caption, Stream
 from pytubefix.helpers import deprecated
 
+T = TypeVar("T")
 
-class StreamQuery(Sequence):
+
+class StreamQuery(Sequence, Generic[T]):
     """Interface for querying the available media streams."""
 
     def __init__(self, fmt_streams):
@@ -38,7 +40,7 @@ class StreamQuery(Sequence):
         is_dash=None,
         audio_track_name=None,
         custom_filter_functions=None,
-    ):
+    ) -> "StreamQuery[T]":
         """Apply the given filtering criterion.
 
         :param fps:
@@ -192,7 +194,7 @@ class StreamQuery(Sequence):
             fmt_streams = filter(filter_lambda, fmt_streams)
         return StreamQuery(list(fmt_streams))
 
-    def order_by(self, attribute_name: str) -> "StreamQuery":
+    def order_by(self, attribute_name: str) -> "StreamQuery[T]":
         """Apply a sort order. Filters out stream the do not have the attribute.
 
         :param str attribute_name:
@@ -227,7 +229,7 @@ class StreamQuery(Sequence):
             sorted(has_attribute, key=lambda s: getattr(s, attribute_name))
         )
 
-    def desc(self) -> "StreamQuery":
+    def desc(self) -> "StreamQuery[T]":
         """Sort streams in descending order.
 
         :rtype: :class:`StreamQuery <StreamQuery>`
@@ -235,7 +237,7 @@ class StreamQuery(Sequence):
         """
         return StreamQuery(self.fmt_streams[::-1])
 
-    def asc(self) -> "StreamQuery":
+    def asc(self) -> "StreamQuery[T]":
         """Sort streams in ascending order.
 
         :rtype: :class:`StreamQuery <StreamQuery>`
@@ -243,7 +245,7 @@ class StreamQuery(Sequence):
         """
         return self
 
-    def get_by_itag(self, itag: Union[int, str]) -> Optional[Stream]:
+    def get_by_itag(self, itag: Union[int, str]) -> Optional[T]:
         """Get the corresponding :class:`Stream <Stream>` for a given itag.
 
         :param int itag:
@@ -276,7 +278,7 @@ class StreamQuery(Sequence):
             progressive=True, subtype="mp4", resolution=resolution
         ).first()
 
-    def get_default_audio_track(self) -> "StreamQuery":
+    def get_default_audio_track(self) -> "StreamQuery[T]":
         """Takes the standard audio tracks, will return all audio tracks if there is no dubbing.
 
         :rtype: :class:`StreamQuery <StreamQuery>`
@@ -284,7 +286,7 @@ class StreamQuery(Sequence):
         """
         return self._filter([lambda s: s.is_default_audio_track])
 
-    def get_extra_audio_track(self) -> Optional["StreamQuery"]:
+    def get_extra_audio_track(self) -> Optional["StreamQuery[T]"]:
         """Get only dubbed audio tracks.
 
         :rtype: :class:`StreamQuery <StreamQuery>` or None
@@ -295,7 +297,7 @@ class StreamQuery(Sequence):
                              and s.includes_audio_track
                              and not s.includes_video_track])
 
-    def get_extra_audio_track_by_name(self, name) -> Optional["StreamQuery"]:
+    def get_extra_audio_track_by_name(self, name) -> Optional["StreamQuery[T]"]:
         """Filter dubbed audio streams by name
 
         :rtype: :class:`StreamQuery <StreamQuery>` or None
@@ -303,7 +305,7 @@ class StreamQuery(Sequence):
         """
         return self._filter([lambda s: s.audio_track_name == name])
 
-    def get_lowest_resolution(self, progressive=True) -> Optional[Stream]:
+    def get_lowest_resolution(self, progressive=True) -> Optional[T]:
         """Get lowest resolution stream that is a progressive mp4.
 
         :param bool progressive:
@@ -321,7 +323,7 @@ class StreamQuery(Sequence):
             .first()
         )
 
-    def get_highest_resolution(self, progressive=True, mime_type=None) -> Optional[Stream]:
+    def get_highest_resolution(self, progressive=True, mime_type=None) -> Optional[T]:
         """Get highest resolution stream that is a progressive video.
 
         :param bool progressive:
@@ -337,7 +339,7 @@ class StreamQuery(Sequence):
         """
         return self.filter(progressive=progressive, mime_type=mime_type).order_by("resolution").last()
 
-    def get_audio_only(self, subtype: str = "mp4") -> Optional[Stream]:
+    def get_audio_only(self, subtype: str = "mp4") -> Optional[T]:
         """Get highest bitrate audio stream for given codec (defaults to mp4)
 
         :param str subtype:
@@ -353,7 +355,7 @@ class StreamQuery(Sequence):
             .last()
         )
 
-    def otf(self, is_otf: bool = False) -> "StreamQuery":
+    def otf(self, is_otf: bool = False) -> "StreamQuery[T]":
         """Filter stream by OTF, useful if some streams have 404 URLs
 
         :param bool is_otf: Set to False to retrieve only non-OTF streams
@@ -362,7 +364,7 @@ class StreamQuery(Sequence):
         """
         return self._filter([lambda s: s.is_otf == is_otf])
 
-    def first(self) -> Optional[Stream]:
+    def first(self) -> Optional[T]:
         """Get the first :class:`Stream <Stream>` in the results.
 
         :rtype: :class:`Stream <Stream>` or None
@@ -407,7 +409,7 @@ class StreamQuery(Sequence):
         """
         return self.fmt_streams
 
-    def __getitem__(self, i: Union[slice, int]):
+    def __getitem__(self, i: Union[slice, int]) -> T:
         return self.fmt_streams[i]
 
     def __len__(self) -> int:

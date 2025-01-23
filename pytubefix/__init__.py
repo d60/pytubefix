@@ -11,6 +11,7 @@ __js_url__ = None
 
 from pytubefix.version import __version__
 from pytubefix.streams import Stream
+from pytubefix.streams_encrypted import EncryptedStream
 from pytubefix.captions import Caption
 from pytubefix.chapters import Chapter
 from pytubefix.keymoments import KeyMoment

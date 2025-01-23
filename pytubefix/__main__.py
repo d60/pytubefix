@@ -38,7 +38,9 @@ import pytubefix
 import pytubefix.exceptions as exceptions
 from pytubefix import extract, request
 from pytubefix import Stream, StreamQuery
+from pytubefix import EncryptedStream
 from pytubefix.helpers import install_proxy
+from pytubefix.cipher import Cipher
 from pytubefix.innertube import InnerTube
 from pytubefix.metadata import YouTubeMetadata
 from pytubefix.monostate import Monostate
@@ -126,6 +128,7 @@ class YouTube:
         self._age_restricted: Optional[bool] = None
 
         self._fmt_streams: Optional[List[Stream]] = None
+        self._encrypted_fmt_streams = None
 
         self._initial_data = None
         self._metadata: Optional[YouTubeMetadata] = None
@@ -349,6 +352,36 @@ class YouTube:
         self.stream_monostate.duration = self.length
 
         return self._fmt_streams
+
+    @property
+    def encrypted_fmt_streams(self):
+        self.check_availability()
+        if self._encrypted_fmt_streams:
+            return self._encrypted_fmt_streams
+
+        self._encrypted_fmt_streams = []
+
+        stream_manifest = extract.apply_descrambler(self.streaming_data)
+        if self.po_token:
+            extract.apply_po_token(stream_manifest, self.vid_info, self.po_token)
+
+        js, js_url = self.js, self.js_url
+        cipher = Cipher(js, js_url)
+        discovered_n = {}
+
+        for stream in stream_manifest:
+            video = EncryptedStream(
+                stream=stream,
+                monostate=self.stream_monostate,
+                cipher=cipher,
+                discovered_n=discovered_n
+            )
+            self._encrypted_fmt_streams.append(video)
+
+        self.stream_monostate.title = self.title
+        self.stream_monostate.duration = self.length
+
+        return self._encrypted_fmt_streams
 
     def check_availability(self):
         """Check whether the video is available.
@@ -698,13 +731,18 @@ class YouTube:
         return result
 
     @property
-    def streams(self) -> StreamQuery:
+    def streams(self) -> StreamQuery[Stream]:
         """Interface to query both adaptive (DASH) and progressive streams.
 
         :rtype: :class:`StreamQuery <StreamQuery>`.
         """
         self.check_availability()
         return StreamQuery(self.fmt_streams)
+
+    @property
+    def encrypted_streams(self) -> StreamQuery[EncryptedStream]:
+        self.check_availability()
+        return StreamQuery(self.encrypted_fmt_streams)
 
     @property
     def thumbnail_url(self) -> str:

@@ -517,6 +517,60 @@ def apply_signature(stream_manifest: Dict, vid_info: Dict, js: str, url_js: str)
         stream_manifest[i]["url"] = url
 
 
+def apply_signature_single(stream, cipher, discovered_n) -> None:
+    try:
+        url: str = stream["url"]
+    except KeyError:
+        raise LiveStreamError("UNKNOWN")
+
+    parsed_url = urlparse(url)
+
+    # Convert query params off url to dict
+    query_params = parse_qs(urlparse(url).query)
+    query_params = {
+        k: v[0] for k, v in query_params.items()
+    }
+
+    # 403 Forbidden fix.
+    if "signature" in url or (
+            "s" not in stream and ("&sig=" in url or "&lsig=" in url)
+    ):
+        # For certain videos, YouTube will just provide them pre-signed, in
+        # which case there's no real magic to download them and we can skip
+        # the whole signature descrambling entirely.
+        logger.debug("signature found, skip decipher")
+
+    else:
+        signature = cipher.get_signature(ciphered_signature=stream["s"])
+
+        logger.debug(
+            "finished descrambling signature for itag=%s", stream["itag"]
+        )
+
+        query_params['sig'] = signature
+
+    if 'n' in query_params.keys():
+        # For WEB-based clients, YouTube sends an "n" parameter that throttles download speed.
+        # To decipher the value of "n", we must interpret the player's JavaScript.
+
+        initial_n = query_params['n']
+        logger.debug(f'Parameter n is: {initial_n}')
+
+        # Check if any previous stream decrypted the parameter
+        if initial_n not in discovered_n:
+            discovered_n[initial_n] = cipher.get_throttling(initial_n)
+        else:
+            logger.debug('Parameter n found skipping decryption')
+
+        new_n = discovered_n[initial_n]
+        query_params['n'] = new_n
+        logger.debug(f'Parameter n deciphered: {new_n}')
+
+    url = f'{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}?{urlencode(query_params)}'  # noqa:E501
+
+    stream["url"] = url
+
+
 def apply_descrambler(stream_data: Dict) -> Optional[List[Dict]]:
     """Apply various in-place transforms to YouTube's media stream data.
 
